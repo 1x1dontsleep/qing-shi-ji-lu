@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f5ef">
+  <meta name="description" content="手机优先的每日饮食、热量与体重记录工具">
+  <title>轻食记</title>
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./nutrition.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow" id="todayLabel"></p>
+        <h1>今天，也照顾好自己。</h1>
+      </div>
+      <button class="avatar" id="openProfile" aria-label="编辑个人资料">我</button>
+    </header>
+
+    <section class="view active" data-view="today">
+      <article class="hero-card">
+        <div class="hero-copy">
+          <span class="pill">今日摄入</span>
+          <p class="calorie"><strong id="consumedKcal">0</strong><span> / <b id="goalKcal">2034</b> kcal</span></p>
+          <p class="muted" id="remainingText">还可以摄入 2034 kcal</p>
+        </div>
+        <div class="ring" id="calorieRing" style="--progress:0">
+          <span id="ringPercent">0%</span>
+        </div>
+      </article>
+
+      <div class="metrics-grid">
+        <article class="metric"><span>每周运动</span><strong><span id="sessionsValue">4–5</span>次</strong><small>约 5–6 小时</small></article>
+        <article class="metric"><span>当前体重</span><strong><span id="weightValue">84</span>kg</strong><small id="bmiValue">BMI 29.8</small></article>
+      </div>
+
+      <article class="macro-card">
+        <div class="macro-head"><div><p class="eyebrow">今日营养目标</p><h2>给训练留足燃料</h2></div><button class="text-button" id="editTargets">调整</button></div>
+        <div class="macro-row"><div><span class="macro-dot protein"></span><strong>蛋白质</strong><small><b id="proteinTotal">0</b> / <span id="proteinGoal">132.8</span>g</small></div><div class="track"><i id="proteinBar"></i></div></div>
+        <div class="macro-row"><div><span class="macro-dot carb"></span><strong>碳水</strong><small><b id="carbTotal">0</b> / <span id="carbGoal">207.5</span>g</small></div><div class="track"><i id="carbBar"></i></div></div>
+        <div class="macro-row"><div><span class="macro-dot fat"></span><strong>脂肪</strong><small><b id="fatTotal">0</b> / <span id="fatGoal">74.7</span>g</small></div><div class="track"><i id="fatBar"></i></div></div>
+      </article>
+
+      <div class="section-heading recommendation-heading">
+        <div><p class="eyebrow">按目标分配</p><h2>每一餐吃什么？</h2></div>
+        <span class="tiny-note">点击食物即可查询</span>
+      </div>
+      <div id="mealRecommendations" class="recommendation-list"></div>
+
+      <div class="section-heading">
+        <div><p class="eyebrow">饮食日志</p><h2>今天吃了什么？</h2></div>
+        <button class="text-button" id="addFoodTop">＋ 添加</button>
+      </div>
+      <div id="mealList" class="meal-list"></div>
+      <div id="emptyMeals" class="empty-card">
+        <span class="empty-icon">🥣</span>
+        <h3>还没有记录</h3>
+        <p>记录第一餐，更容易看见自己的节奏。</p>
+        <button class="primary" id="addFirstFood">记录饮食</button>
+      </div>
+    </section>
+
+    <section class="view" data-view="history">
+      <div class="section-heading page-title">
+        <div><p class="eyebrow">趋势</p><h2>不是追求完美，是持续了解自己。</h2></div>
+      </div>
+      <article class="chart-card">
+        <div class="chart-head"><div><span>近 7 天摄入</span><strong id="weekAverage">0 kcal</strong></div><span class="pill">日均</span></div>
+        <div class="bar-chart" id="calorieChart"></div>
+      </article>
+      <article class="weight-card">
+        <div><p class="eyebrow">体重记录</p><h3>今天的体重</h3><p class="muted">变化很正常，关注长期趋势。</p></div>
+        <div class="weight-input"><input id="weightInput" type="number" inputmode="decimal" min="30" max="300" step="0.1" value="84"><span>kg</span></div>
+        <button class="secondary" id="saveWeight">保存体重</button>
+      </article>
+      <article class="privacy-note"><span>🔒</span><p><strong>你的记录只保存在这台设备</strong><br>第一版不上传饮食和体重数据。</p></article>
+      <details class="science-note">
+        <summary>查看目标计算依据</summary>
+        <p>当前目标采用你根据谭成义减脂计划提供的数据：碳水 207.5g、蛋白质 132.8g、脂肪 74.7g，三大营养素折算约 2034 kcal。</p>
+        <p>公式只是起点：连续记录 2–3 周。如果每周下降明显超过 0.8 kg、训练乏力或恢复变差，可增加 100–150 kcal；若体重均值完全不动，再减少 100–150 kcal。</p>
+      </details>
+    </section>
+
+    <section class="view" data-view="fitness">
+      <div class="fitness-hero">
+        <span class="eyebrow light">即将加入 · 健身计划</span>
+        <h2>让每一次训练，<br>都和饮食互相配合。</h2>
+        <p>下一阶段可加入训练日历、动作库、组数重量记录，以及训练后的营养建议。</p>
+      </div>
+      <div class="roadmap">
+        <article><span>01</span><div><h3>训练日历</h3><p>安排每周训练，轻松查看完成情况。</p></div></article>
+        <article><span>02</span><div><h3>动作与组数</h3><p>记录动作、重量、次数和个人最佳。</p></div></article>
+        <article><span>03</span><div><h3>饮食联动</h3><p>训练日与休息日使用不同营养目标。</p></div></article>
+      </div>
+      <button class="primary full" id="fitnessInterest">我想优先加入这个功能</button>
+    </section>
+  </main>
+
+  <nav class="bottom-nav" aria-label="主导航">
+    <button class="nav-item active" data-target="today"><span>⌂</span>今天</button>
+    <button class="nav-item" data-target="history"><span>⌁</span>趋势</button>
+    <button class="nav-item" data-target="fitness"><span>◇</span>健身</button>
+  </nav>
+
+  <dialog id="foodDialog">
+    <form method="dialog" id="foodForm">
+      <div class="dialog-head"><div><p class="eyebrow">快速记录</p><h2>搜索并添加食物</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="关闭">×</button></div>
+      <label>餐次<select id="mealType"><option>早餐</option><option>午餐</option><option>晚餐</option><option>加餐</option></select></label>
+      <label>食物名称<div class="food-search"><input id="foodName" required maxlength="40" placeholder="例如：鸡胸肉、米饭、香蕉"><button id="searchFood" type="button">联网查询</button></div><small>中文优先显示；数据联网获取。薄荷健康官方 API 尚未连接。<a class="boohee-link" href="https://foodie.boohee.com/" target="_blank" rel="noopener">打开薄荷健康核对</a></small></label>
+      <section class="photo-ocr" aria-labelledby="photoOcrTitle">
+        <div class="photo-ocr-copy"><strong id="photoOcrTitle">有包装？拍营养成分表</strong><small>支持中文和英文，图片只在你的手机中识别</small></div>
+        <label class="photo-button" for="nutritionPhoto">📷 拍照识别</label>
+        <input id="nutritionPhoto" class="visually-hidden" type="file" accept="image/*" capture="environment">
+        <img id="nutritionPreview" class="nutrition-preview" alt="营养成分表预览" hidden>
+        <div id="ocrStatus" class="ocr-status" role="status" hidden></div>
+        <div id="ocrEditor" class="ocr-editor" hidden>
+          <p>请核对识别结果，标签排版不同可能造成误差。</p>
+          <div class="ocr-grid">
+            <label>数据对应重量<input id="ocrBasis" type="number" inputmode="decimal" min="1" max="3000" step="0.1"><small>克</small></label>
+            <label>热量<input id="ocrKcal" type="number" inputmode="decimal" min="0" max="10000" step="0.1"><small>kcal</small></label>
+            <label>蛋白质<input id="ocrProtein" type="number" inputmode="decimal" min="0" max="1000" step="0.1"><small>克</small></label>
+            <label>碳水<input id="ocrCarbs" type="number" inputmode="decimal" min="0" max="1000" step="0.1"><small>克</small></label>
+            <label>脂肪<input id="ocrFat" type="number" inputmode="decimal" min="0" max="1000" step="0.1"><small>克</small></label>
+          </div>
+          <button id="useOcrResult" class="secondary full" type="button">使用识别结果</button>
+        </div>
+      </section>
+      <div id="searchStatus" class="search-status" hidden></div>
+      <div id="foodResults" class="food-results"></div>
+      <article id="selectedFood" class="selected-food" hidden></article>
+      <label id="amountLabel" hidden>食用重量<input id="foodAmount" type="number" inputmode="decimal" min="1" max="3000" step="1" value="100"><small>克 · 营养数据会按重量自动换算</small></label>
+      <button class="primary full" id="saveFood" value="default" type="submit" disabled>保存这份食物</button>
+    </form>
+  </dialog>
+
+  <dialog id="profileDialog">
+    <form method="dialog" id="profileForm">
+      <div class="dialog-head"><div><p class="eyebrow">个人目标</p><h2>我的资料</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="关闭">×</button></div>
+      <div class="form-row"><label>年龄<input id="ageInput" required type="number" inputmode="numeric" min="18" max="100"><small>岁</small></label><label>生理性别<select id="sexInput"><option value="unspecified">暂不设置</option><option value="male">男性</option><option value="female">女性</option></select><small>仅用于代谢估算</small></label></div>
+      <div class="form-row"><label>身高<input id="heightInput" required type="number" inputmode="numeric" min="100" max="230"><small>厘米</small></label><label>体重<input id="profileWeight" required type="number" inputmode="decimal" min="30" max="300" step="0.1"><small>公斤</small></label></div>
+      <div class="form-row"><label>每周训练次数<input id="sessionsInput" required type="number" inputmode="decimal" min="0" max="14" step="0.5"><small>次</small></label><label>每周训练时长<input id="hoursInput" required type="number" inputmode="decimal" min="0" max="30" step="0.5"><small>小时</small></label></div>
+      <button class="secondary full calculate-button" id="recalculate" type="button">恢复谭成义计划目标</button>
+      <label>每日热量目标<input id="goalInput" required type="number" inputmode="numeric" min="1200" max="6000"><small>kcal · 当前计划 <b id="suggestedGoal">2034</b> kcal</small></label>
+      <div class="form-row"><label>蛋白质目标<input id="proteinGoalInput" required type="number" inputmode="numeric" min="40" max="400"><small>克</small></label><label>碳水目标<input id="carbGoalInput" required type="number" inputmode="numeric" min="30" max="1000"><small>克</small></label></div>
+      <label>脂肪目标<input id="fatGoalInput" required type="number" inputmode="numeric" min="20" max="300"><small>克</small></label>
+      <button class="primary full" value="default" type="submit">保存设置</button>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
