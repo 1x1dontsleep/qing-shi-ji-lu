@@ -16,7 +16,10 @@
         <p class="eyebrow" id="todayLabel"></p>
         <h1>今天，也照顾好自己。</h1>
       </div>
-      <button class="avatar" id="openProfile" aria-label="编辑个人资料">我</button>
+      <div class="top-actions">
+        <button class="sync-button" id="openAccount" type="button" aria-label="账号与云同步"><span aria-hidden="true">☁</span><b id="accountLabel">登录同步</b></button>
+        <button class="avatar" id="openProfile" type="button" aria-label="编辑个人资料">我</button>
+      </div>
     </header>
 
     <section class="view active" data-view="today">
@@ -75,7 +78,7 @@
         <div class="weight-input"><input id="weightInput" type="number" inputmode="decimal" min="30" max="300" step="0.1" value="84"><span>kg</span></div>
         <button class="secondary" id="saveWeight">保存体重</button>
       </article>
-      <article class="privacy-note"><span>🔒</span><p><strong>你的记录只保存在这台设备</strong><br>第一版不上传饮食和体重数据。</p></article>
+      <article class="privacy-note"><span>🔒</span><p><strong id="privacyTitle">未登录时，记录只保存在这台设备</strong><br><span id="privacyText">登录后可在手机和电脑间同步；营养成分照片不会上传。</span></p></article>
       <details class="science-note">
         <summary>查看目标计算依据</summary>
         <p>当前目标采用你根据谭成义减脂计划提供的数据：碳水 207.5g、蛋白质 132.8g、脂肪 74.7g，三大营养素折算约 2034 kcal。</p>
@@ -153,8 +156,29 @@
     </form>
   </dialog>
 
+  <dialog id="authDialog">
+    <form id="authForm">
+      <div class="dialog-head"><div><p class="eyebrow">账号与云同步</p><h2>在所有设备继续记录</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="关闭">×</button></div>
+      <div id="authSignedOut">
+        <p class="auth-intro">使用邮箱和密码登录。首次登录会把本机现有记录安全地合并到云端。</p>
+        <label>邮箱<input id="authEmail" required type="email" inputmode="email" autocomplete="email" placeholder="name@example.com"></label>
+        <label>密码<input id="authPassword" required type="password" minlength="6" autocomplete="current-password" placeholder="至少 6 位"></label>
+        <div class="auth-actions"><button class="primary" id="signIn" type="submit">登录</button><button class="secondary" id="signUp" type="button">注册新账号</button></div>
+        <small class="auth-hint">注册后可能需要在邮箱中确认账号，再返回此页面登录。</small>
+      </div>
+      <div id="authSignedIn" hidden>
+        <div class="account-card"><span class="account-cloud">☁</span><div><small>当前账号</small><strong id="accountEmail"></strong><p id="lastSyncText">正在检查云端数据…</p></div></div>
+        <div class="auth-actions"><button class="secondary" id="syncNow" type="button">立即同步</button><button class="danger-button" id="signOut" type="button">退出登录</button></div>
+        <small class="auth-hint">退出后本机页面会恢复为空白；云端记录不会删除，下次登录即可恢复。</small>
+      </div>
+      <div id="authStatus" class="auth-status" role="status" hidden></div>
+    </form>
+  </dialog>
+
   <div class="toast" id="toast" role="status"></div>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js"></script>
+  <script src="./cloud-config.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
