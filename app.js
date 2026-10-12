@@ -4,7 +4,7 @@ const today=iso(new Date());
 const PLAN={goal:2034,proteinGoal:132.8,carbGoal:207.5,fatGoal:74.7};
 const PLAN_VERSION='tan-v1';
 const defaults={age:22,sex:'male',height:168,weight:84,sessions:4.5,hours:5.5,...PLAN};
-const base={profile:defaults,meals:{},weights:{[today]:84},fitnessInterest:false};
+const base={profile:defaults,meals:{},weights:{[today]:84},savedFoods:[],fitnessInterest:false};
 let state=(()=>{try{const stored=JSON.parse(localStorage.getItem(KEY)||'{}');const migrate=stored.planVersion!==PLAN_VERSION;return {...base,...stored,planVersion:PLAN_VERSION,profile:{...defaults,...(stored.profile||{}),...(migrate?{sex:'male',...PLAN}:{})}}}catch{return {...base,planVersion:PLAN_VERSION}}})();
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const save=()=>localStorage.setItem(KEY,JSON.stringify(state));
@@ -12,7 +12,7 @@ const toast=msg=>{const el=$('#toast');el.textContent=msg;el.classList.add('show
 const fmtDate=d=>new Intl.DateTimeFormat('zh-CN',{month:'long',day:'numeric',weekday:'long'}).format(d);
 const mealEmoji={早餐:'☀️',午餐:'🥗',晚餐:'🌙',加餐:'🍎'};
 const display=n=>Number(n).toFixed(Number(n)%1?1:0);
-let selectedFood=null,ocrWorker=null,previewUrl=null,ocrRun=0;
+let selectedFood=null,ocrWorker=null,previewUrl=null,ocrRun=0,customEntryMode='ocr';
 const FOOD_TERMS={
   '鸡胸肉':'chicken breast roasted','鸡肉':'chicken cooked','米饭':'white rice cooked','糙米':'brown rice cooked','荞麦面':'buckwheat noodles cooked','面条':'noodles cooked','意面':'pasta cooked','燕麦':'oatmeal cooked','面包':'whole wheat bread','鸡蛋':'egg whole cooked','牛肉':'beef cooked','猪肉':'pork cooked','三文鱼':'salmon cooked','金枪鱼':'tuna canned','虾仁':'shrimp cooked','虾':'shrimp cooked','低脂牛奶':'milk low fat','脱脂牛奶':'milk nonfat','牛奶':'milk','希腊酸奶':'greek yogurt plain','酸奶':'yogurt plain','豆浆':'soy milk','豆腐':'tofu firm','香蕉':'banana raw','苹果':'apple raw','橙子':'orange raw','蓝莓':'blueberries raw','西兰花':'broccoli cooked','彩椒':'sweet pepper raw','菌菇':'mushrooms cooked','青菜':'leafy greens cooked','绿叶菜':'leafy greens cooked','土豆':'potato cooked','红薯':'sweet potato cooked','牛油果':'avocado raw','橄榄油':'olive oil','花生酱':'peanut butter','坚果':'mixed nuts','花生':'peanuts roasted','饺子':'dumpling','炒饭':'fried rice','汉堡':'hamburger','披萨':'pizza'
 };
@@ -76,8 +76,18 @@ function resetPhotoOcr(){
   $('#nutritionPreview').removeAttribute('src');$('#nutritionPreview').hidden=true;$('#ocrStatus').hidden=true;$('#ocrStatus').textContent='';$('#ocrEditor').hidden=true;
   ['#ocrBasis','#ocrKcal','#ocrProtein','#ocrCarbs','#ocrFat'].forEach(id=>$(id).value='');
 }
-function resetFoodSearch(){selectedFood=null;$('#foodResults').innerHTML='';$('#foodResults').removeAttribute('data-foods');$('#searchStatus').hidden=true;$('#selectedFood').hidden=true;$('#amountLabel').hidden=true;$('#saveFood').disabled=true;$('#foodAmount').value=100;resetPhotoOcr()}
-function openFood(meal,name){$('#foodForm').reset();resetFoodSearch();if(meal)$('#mealType').value=meal;if(name)$('#foodName').value=name;$('#foodDialog').showModal();setTimeout(()=>name?searchFood():$('#foodName').focus(),100)}
+function renderSavedFoods(){
+  const foods=state.savedFoods||[];$('#savedFoodSection').hidden=!foods.length;
+  $('#savedFoodList').innerHTML=foods.map((food,index)=>`<div class="saved-food-row"><button type="button" class="saved-food-pick" data-saved-index="${index}"><strong>${escapeHtml(food.name)}</strong><span>每 100g · ${Math.round(food.kcal)} kcal · 蛋白 ${display(food.protein)}g</span></button><button type="button" class="saved-food-delete" data-saved-delete="${index}" aria-label="删除 ${escapeHtml(food.name)}">×</button></div>`).join('');
+}
+function rememberFood(name,amount){
+  if(!selectedFood?.remember)return;
+  const entry={name,kcal:selectedFood.kcal,protein:selectedFood.protein,carbs:selectedFood.carbs,fat:selectedFood.fat,defaultAmount:amount,source:selectedFood.source,savedAt:Date.now()};
+  const key=name.trim().toLocaleLowerCase();const foods=state.savedFoods||[];const existing=foods.findIndex(food=>food.name.trim().toLocaleLowerCase()===key);
+  if(existing>=0)foods.splice(existing,1);foods.unshift(entry);state.savedFoods=foods.slice(0,50);
+}
+function resetFoodSearch(){selectedFood=null;customEntryMode='ocr';$('#foodResults').innerHTML='';$('#foodResults').removeAttribute('data-foods');$('#searchStatus').hidden=true;$('#selectedFood').hidden=true;$('#amountLabel').hidden=true;$('#saveFood').disabled=true;$('#foodAmount').value=100;resetPhotoOcr()}
+function openFood(meal,name){$('#foodForm').reset();resetFoodSearch();renderSavedFoods();if(meal)$('#mealType').value=meal;if(name)$('#foodName').value=name;$('#foodDialog').showModal();setTimeout(()=>name?searchFood():$('#foodName').focus(),100)}
 function nutrient(food,name,unit){const n=(food.foodNutrients||[]).find(x=>x.nutrientName===name&&(!unit||String(x.unitName).toUpperCase()===unit));return n?Number(n.value??n.amount):null}
 function normalizeFood(food){
   const kcal=nutrient(food,'Energy','KCAL'),protein=nutrient(food,'Protein'),carbs=nutrient(food,'Carbohydrate, by difference'),fat=nutrient(food,'Total lipid (fat)');
@@ -126,7 +136,7 @@ async function getOcrWorker(){
 async function recognizeNutritionPhoto(file){
   if(!file)return;
   $('#nutritionPhoto').value='';
-  resetPhotoOcr();const run=ocrRun;
+  resetPhotoOcr();customEntryMode='ocr';$('#ocrEditorHint').textContent='请核对识别结果，标签排版不同可能造成误差。';const run=ocrRun;
   previewUrl=URL.createObjectURL(file);$('#nutritionPreview').src=previewUrl;$('#nutritionPreview').hidden=false;
   $('#ocrStatus').hidden=false;$('#ocrStatus').textContent='正在加载中英文识别模型，首次使用可能需要一点时间…';
   try{
@@ -177,17 +187,19 @@ $('#searchFood').addEventListener('click',searchFood);
 $$('[data-close-dialog]').forEach(button=>button.addEventListener('click',()=>button.closest('dialog').close()));
 $('#foodDialog').addEventListener('close',()=>{$('#foodForm').reset();resetFoodSearch()});
 $('#nutritionPhoto').addEventListener('change',e=>recognizeNutritionPhoto(e.target.files[0]));
+$('#openCustomFood').addEventListener('click',()=>{resetPhotoOcr();customEntryMode='custom';$('#ocrBasis').value=100;$('#ocrStatus').hidden=false;$('#ocrStatus').textContent='填写食物包装或配方中的营养数据，保存后会加入常用食物。';$('#ocrEditorHint').textContent='请填写以下 5 项；建议统一填写每 100 克的数据。';$('#ocrEditor').hidden=false;$('#foodName').focus()});
 $('#useOcrResult').addEventListener('click',()=>{
-  const basis=Number($('#ocrBasis').value),kcal=Number($('#ocrKcal').value),protein=Number($('#ocrProtein').value),carbs=Number($('#ocrCarbs').value),fat=Number($('#ocrFat').value);
-  if(!basis||basis<=0||[kcal,protein,carbs,fat].some(value=>!Number.isFinite(value)||value<0))return toast('请补全并检查 5 项识别数据');
-  if(!$('#foodName').value.trim())$('#foodName').value='拍照识别食品';
-  const factor=100/basis;selectedFood={description:'包装营养成分表',source:'本机拍照识别（已由你核对）',kcal:kcal*factor,protein:protein*factor,carbs:carbs*factor,fat:fat*factor};
+  const raw=['#ocrBasis','#ocrKcal','#ocrProtein','#ocrCarbs','#ocrFat'].map(id=>$(id).value.trim()),[basis,kcal,protein,carbs,fat]=raw.map(Number);
+  if(raw.some(value=>value==='')||!basis||basis<=0||[kcal,protein,carbs,fat].some(value=>!Number.isFinite(value)||value<0))return toast('请补全并检查 5 项识别数据');
+  if(!$('#foodName').value.trim())$('#foodName').value=customEntryMode==='custom'?'自定义食物':'拍照识别食品';
+  const factor=100/basis,source=customEntryMode==='custom'?'自定义营养数据':'本机拍照识别（已由你核对）';selectedFood={description:customEntryMode==='custom'?'自定义食物':'包装营养成分表',source,remember:true,kcal:kcal*factor,protein:protein*factor,carbs:carbs*factor,fat:fat*factor};
   $('#foodAmount').value=basis;$('#foodResults').innerHTML='';$('#searchStatus').hidden=true;$('#selectedFood').hidden=false;$('#amountLabel').hidden=false;$('#saveFood').disabled=false;updateSelectedFood();toast('已使用识别结果');
 });
+$('#savedFoodList').addEventListener('click',e=>{const remove=e.target.closest('[data-saved-delete]');if(remove){state.savedFoods.splice(Number(remove.dataset.savedDelete),1);save();renderSavedFoods();toast('已从常用食物移除');return}const button=e.target.closest('[data-saved-index]');if(!button)return;const food=state.savedFoods[Number(button.dataset.savedIndex)];if(!food)return;resetPhotoOcr();$('#foodName').value=food.name;selectedFood={...food,description:'我的常用食物',source:'我的食物库',remember:true};$('#foodAmount').value=food.defaultAmount||100;$('#foodResults').innerHTML='';$('#searchStatus').hidden=true;$('#selectedFood').hidden=false;$('#amountLabel').hidden=false;$('#saveFood').disabled=false;updateSelectedFood()});
 $('#foodName').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchFood()}});
 $('#foodResults').addEventListener('click',e=>{const button=e.target.closest('[data-food-index]');if(!button)return;const foods=JSON.parse($('#foodResults').dataset.foods||'[]');selectedFood=foods[Number(button.dataset.foodIndex)];if(!selectedFood)return;$('#foodResults').innerHTML='';$('#searchStatus').hidden=true;$('#selectedFood').hidden=false;$('#amountLabel').hidden=false;$('#saveFood').disabled=false;updateSelectedFood()});
 $('#foodAmount').addEventListener('input',updateSelectedFood);
-$('#foodForm').addEventListener('submit',e=>{e.preventDefault();if(!selectedFood)return searchFood();const amount=Number($('#foodAmount').value)||100,ratio=amount/100,one=n=>Math.round(n*10)/10;const item={type:$('#mealType').value,name:$('#foodName').value.trim(),amount,sourceName:selectedFood.description,source:selectedFood.source||'USDA FoodData Central',kcal:Math.round(selectedFood.kcal*ratio),protein:one(selectedFood.protein*ratio),carbs:one(selectedFood.carbs*ratio),fat:one(selectedFood.fat*ratio)};(state.meals[today] ||= []).push(item);save();$('#foodDialog').close();render();toast('营养数据已自动记录')});
+$('#foodForm').addEventListener('submit',e=>{e.preventDefault();if(!selectedFood)return searchFood();const amount=Number($('#foodAmount').value)||100,ratio=amount/100,one=n=>Math.round(n*10)/10,name=$('#foodName').value.trim(),remembered=Boolean(selectedFood.remember);const item={type:$('#mealType').value,name,amount,sourceName:selectedFood.description,source:selectedFood.source||'USDA FoodData Central',kcal:Math.round(selectedFood.kcal*ratio),protein:one(selectedFood.protein*ratio),carbs:one(selectedFood.carbs*ratio),fat:one(selectedFood.fat*ratio)};(state.meals[today] ||= []).push(item);rememberFood(name,amount);save();$('#foodDialog').close();render();toast(remembered?'已记录并保存到常用食物':'营养数据已自动记录')});
 $('#mealRecommendations').addEventListener('click',e=>{const swap=e.target.closest('[data-swap-meal]');if(swap){const meal=swap.dataset.swapMeal;recommendationVariant[meal]=(recommendationVariant[meal]+1)%MEAL_PLANS[meal].length;renderRecommendations();return}const food=e.target.closest('[data-recommend-food]');if(food)openFood(food.dataset.recommendMeal,food.dataset.recommendFood)});
 $('#mealList').addEventListener('click',e=>{const b=e.target.closest('[data-delete]');if(!b)return;state.meals[today].splice(Number(b.dataset.delete),1);save();render();toast('已删除这条记录')});
 $$('.nav-item').forEach(b=>b.addEventListener('click',()=>{$$('.nav-item').forEach(x=>x.classList.toggle('active',x===b));$$('.view').forEach(v=>v.classList.toggle('active',v.dataset.view===b.dataset.target));scrollTo({top:0,behavior:'smooth'})}));
