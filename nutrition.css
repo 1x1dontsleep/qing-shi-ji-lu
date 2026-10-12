@@ -42,10 +42,13 @@
 .photo-ocr{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;margin:-2px 0 15px;padding:14px;border:1px solid #dce6d3;border-radius:17px;background:#f5f8ef}
 .photo-ocr-copy strong{display:block;font-size:13px}.photo-ocr-copy small{display:block;margin-top:3px;color:var(--muted);font-size:10px;line-height:1.4}
 .photo-button{margin:0;padding:10px 12px;border-radius:12px;background:var(--green);color:#fff;font-size:11px;font-weight:800;white-space:nowrap;cursor:pointer}
+.entry-buttons{display:flex;gap:6px;align-items:center}.custom-food-button{border:1px solid #cad8c1;border-radius:12px;background:#fff;color:var(--green);padding:9px 11px;font-size:11px;font-weight:800;white-space:nowrap}
 .visually-hidden{position:absolute!important;width:1px!important;height:1px!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important}
 .nutrition-preview{grid-column:1/-1;width:100%;max-height:190px;object-fit:contain;border-radius:12px;background:#fff;border:1px solid var(--line)}
 .ocr-status{grid-column:1/-1;padding:10px 11px;border-radius:11px;background:#e9f0e1;color:var(--green);font-size:11px;line-height:1.5}
 .ocr-editor{grid-column:1/-1;border-top:1px solid #dce6d3;padding-top:10px}.ocr-editor>p{margin:0 0 10px;color:var(--muted);font-size:10px;line-height:1.5}
 .ocr-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.ocr-grid label{margin:0;font-size:10px}.ocr-grid label:first-child{grid-column:1/-1}.ocr-grid input{padding:10px;margin-top:4px}.ocr-grid small{display:inline;margin-left:3px}
 .ocr-editor .secondary{margin-top:12px}
+.saved-foods{margin:0 0 15px;padding:13px;border:1px solid #e0e5db;border-radius:16px;background:#fff}.saved-foods-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}.saved-foods-head strong{font-size:12px}.saved-foods-head small{font-size:9px;color:var(--muted)}
+.saved-food-list{display:grid;gap:7px}.saved-food-row{display:grid;grid-template-columns:1fr auto;gap:6px}.saved-food-pick{border:0;border-radius:11px;background:#f1f5eb;color:var(--ink);padding:9px 11px;text-align:left}.saved-food-pick strong{display:block;font-size:11px}.saved-food-pick span{display:block;margin-top:2px;color:var(--muted);font-size:9px}.saved-food-delete{width:34px;border:0;border-radius:11px;background:#f7f2ee;color:#9a7065;font-size:16px}
 dialog{max-height:calc(100dvh - 28px);overflow:auto}
