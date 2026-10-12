@@ -136,7 +136,7 @@ async function getOcrWorker(){
 async function recognizeNutritionPhoto(file){
   if(!file)return;
   $('#nutritionPhoto').value='';
-  resetPhotoOcr();customEntryMode='ocr';$('#ocrEditorHint').textContent='请核对识别结果，标签排版不同可能造成误差。';const run=ocrRun;
+  resetPhotoOcr();customEntryMode='ocr';$('#ocrEditorHint').textContent='请核对识别结果，标签排版不同可能造成误差。';$('#useOcrResult').textContent='使用识别结果';const run=ocrRun;
   previewUrl=URL.createObjectURL(file);$('#nutritionPreview').src=previewUrl;$('#nutritionPreview').hidden=false;
   $('#ocrStatus').hidden=false;$('#ocrStatus').textContent='正在加载中英文识别模型，首次使用可能需要一点时间…';
   try{
@@ -187,13 +187,13 @@ $('#searchFood').addEventListener('click',searchFood);
 $$('[data-close-dialog]').forEach(button=>button.addEventListener('click',()=>button.closest('dialog').close()));
 $('#foodDialog').addEventListener('close',()=>{$('#foodForm').reset();resetFoodSearch()});
 $('#nutritionPhoto').addEventListener('change',e=>recognizeNutritionPhoto(e.target.files[0]));
-$('#openCustomFood').addEventListener('click',()=>{resetPhotoOcr();customEntryMode='custom';$('#ocrBasis').value=100;$('#ocrStatus').hidden=false;$('#ocrStatus').textContent='填写食物包装或配方中的营养数据，保存后会加入常用食物。';$('#ocrEditorHint').textContent='请填写以下 5 项；建议统一填写每 100 克的数据。';$('#ocrEditor').hidden=false;$('#foodName').focus()});
+$('#openCustomFood').addEventListener('click',()=>{resetPhotoOcr();customEntryMode='custom';$('#ocrBasis').value=100;$('#ocrStatus').hidden=false;$('#ocrStatus').textContent='填写食物包装或配方中的营养数据，保存后会加入常用食物。';$('#ocrEditorHint').textContent='请填写以下 5 项；建议统一填写每 100 克的数据。';$('#useOcrResult').textContent='使用自定义数据';$('#ocrEditor').hidden=false;$('#foodName').focus()});
 $('#useOcrResult').addEventListener('click',()=>{
   const raw=['#ocrBasis','#ocrKcal','#ocrProtein','#ocrCarbs','#ocrFat'].map(id=>$(id).value.trim()),[basis,kcal,protein,carbs,fat]=raw.map(Number);
   if(raw.some(value=>value==='')||!basis||basis<=0||[kcal,protein,carbs,fat].some(value=>!Number.isFinite(value)||value<0))return toast('请补全并检查 5 项识别数据');
   if(!$('#foodName').value.trim())$('#foodName').value=customEntryMode==='custom'?'自定义食物':'拍照识别食品';
   const factor=100/basis,source=customEntryMode==='custom'?'自定义营养数据':'本机拍照识别（已由你核对）';selectedFood={description:customEntryMode==='custom'?'自定义食物':'包装营养成分表',source,remember:true,kcal:kcal*factor,protein:protein*factor,carbs:carbs*factor,fat:fat*factor};
-  $('#foodAmount').value=basis;$('#foodResults').innerHTML='';$('#searchStatus').hidden=true;$('#selectedFood').hidden=false;$('#amountLabel').hidden=false;$('#saveFood').disabled=false;updateSelectedFood();toast('已使用识别结果');
+  $('#foodAmount').value=basis;$('#foodResults').innerHTML='';$('#searchStatus').hidden=true;$('#selectedFood').hidden=false;$('#amountLabel').hidden=false;$('#saveFood').disabled=false;updateSelectedFood();toast(customEntryMode==='custom'?'已使用自定义数据':'已使用识别结果');
 });
 $('#savedFoodList').addEventListener('click',e=>{const remove=e.target.closest('[data-saved-delete]');if(remove){state.savedFoods.splice(Number(remove.dataset.savedDelete),1);save();renderSavedFoods();toast('已从常用食物移除');return}const button=e.target.closest('[data-saved-index]');if(!button)return;const food=state.savedFoods[Number(button.dataset.savedIndex)];if(!food)return;resetPhotoOcr();$('#foodName').value=food.name;selectedFood={...food,description:'我的常用食物',source:'我的食物库',remember:true};$('#foodAmount').value=food.defaultAmount||100;$('#foodResults').innerHTML='';$('#searchStatus').hidden=true;$('#selectedFood').hidden=false;$('#amountLabel').hidden=false;$('#saveFood').disabled=false;updateSelectedFood()});
 $('#foodName').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchFood()}});
