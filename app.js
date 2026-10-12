@@ -4,15 +4,19 @@ const today=iso(new Date());
 const PLAN={goal:2034,proteinGoal:132.8,carbGoal:207.5,fatGoal:74.7};
 const PLAN_VERSION='tan-v1';
 const defaults={age:22,sex:'male',height:168,weight:84,sessions:4.5,hours:5.5,...PLAN};
-const base={profile:defaults,meals:{},weights:{[today]:84},savedFoods:[],fitnessInterest:false};
-let state=(()=>{try{const stored=JSON.parse(localStorage.getItem(KEY)||'{}');const migrate=stored.planVersion!==PLAN_VERSION;return {...base,...stored,planVersion:PLAN_VERSION,profile:{...defaults,...(stored.profile||{}),...(migrate?{sex:'male',...PLAN}:{})}}}catch{return {...base,planVersion:PLAN_VERSION}}})();
+const CLOUD_MIGRATION_KEY='qingshiji-cloud-migrated-user';
+const freshState=()=>({profile:{...defaults},meals:{},weights:{[today]:defaults.weight},savedFoods:[],fitnessInterest:false,planVersion:PLAN_VERSION});
+function normalizeState(stored={}){const clean=stored&&typeof stored==='object'?stored:{};const migrate=clean.planVersion!==PLAN_VERSION;return {...freshState(),...clean,planVersion:PLAN_VERSION,profile:{...defaults,...(clean.profile||{}),...(migrate?{sex:'male',...PLAN}:{})},meals:clean.meals&&typeof clean.meals==='object'?clean.meals:{},weights:clean.weights&&typeof clean.weights==='object'?clean.weights:{[today]:defaults.weight},savedFoods:Array.isArray(clean.savedFoods)?clean.savedFoods:[]}}
+let state=(()=>{try{return normalizeState(JSON.parse(localStorage.getItem(KEY)||'{}'))}catch{return freshState()}})();
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const save=()=>localStorage.setItem(KEY,JSON.stringify(state));
+const saveLocal=()=>localStorage.setItem(KEY,JSON.stringify(state));
+const save=()=>{saveLocal();queueCloudSync()};
 const toast=msg=>{const el=$('#toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),1800)};
 const fmtDate=d=>new Intl.DateTimeFormat('zh-CN',{month:'long',day:'numeric',weekday:'long'}).format(d);
 const mealEmoji={早餐:'☀️',午餐:'🥗',晚餐:'🌙',加餐:'🍎'};
 const display=n=>Number(n).toFixed(Number(n)%1?1:0);
 let selectedFood=null,ocrWorker=null,previewUrl=null,ocrRun=0,customEntryMode='ocr';
+let cloudClient=null,authSession=null,cloudTimer=null,isApplyingCloud=false,lastSyncAt=null,lastHandledUser='';
 const FOOD_TERMS={
   '鸡胸肉':'chicken breast roasted','鸡肉':'chicken cooked','米饭':'white rice cooked','糙米':'brown rice cooked','荞麦面':'buckwheat noodles cooked','面条':'noodles cooked','意面':'pasta cooked','燕麦':'oatmeal cooked','面包':'whole wheat bread','鸡蛋':'egg whole cooked','牛肉':'beef cooked','猪肉':'pork cooked','三文鱼':'salmon cooked','金枪鱼':'tuna canned','虾仁':'shrimp cooked','虾':'shrimp cooked','低脂牛奶':'milk low fat','脱脂牛奶':'milk nonfat','牛奶':'milk','希腊酸奶':'greek yogurt plain','酸奶':'yogurt plain','豆浆':'soy milk','豆腐':'tofu firm','香蕉':'banana raw','苹果':'apple raw','橙子':'orange raw','蓝莓':'blueberries raw','西兰花':'broccoli cooked','彩椒':'sweet pepper raw','菌菇':'mushrooms cooked','青菜':'leafy greens cooked','绿叶菜':'leafy greens cooked','土豆':'potato cooked','红薯':'sweet potato cooked','牛油果':'avocado raw','橄榄油':'olive oil','花生酱':'peanut butter','坚果':'mixed nuts','花生':'peanuts roasted','饺子':'dumpling','炒饭':'fried rice','汉堡':'hamburger','披萨':'pizza'
 };
@@ -63,6 +67,50 @@ function render(){
   renderRecommendations();
 }
 function escapeHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function profileChanged(candidate={}){return Object.keys(defaults).some(key=>String(candidate[key]??defaults[key])!==String(defaults[key]))}
+function hasMeaningfulData(candidate){return Object.values(candidate.meals||{}).some(items=>items?.length)||Boolean((candidate.savedFoods||[]).length)||Boolean(candidate.fitnessInterest)||profileChanged(candidate.profile)||Object.entries(candidate.weights||{}).some(([day,value])=>day!==today||Number(value)!==defaults.weight)}
+function mealIdentity(meal){return meal.id||[meal.type,meal.name,meal.amount,meal.kcal,meal.protein,meal.carbs,meal.fat,meal.source].join('|')}
+function mergeStates(remoteValue,localValue){
+  const remote=normalizeState(remoteValue),local=normalizeState(localValue),meals={...remote.meals};
+  Object.entries(local.meals||{}).forEach(([day,items])=>{const combined=new Map((meals[day]||[]).map(item=>[mealIdentity(item),item]));(items||[]).forEach(item=>combined.set(mealIdentity(item),item));meals[day]=[...combined.values()]});
+  const localWeights=Object.fromEntries(Object.entries(local.weights||{}).filter(([day,value])=>day!==today||Number(value)!==defaults.weight));
+  const foods=new Map((remote.savedFoods||[]).map(food=>[String(food.name||'').trim().toLocaleLowerCase(),food]));(local.savedFoods||[]).forEach(food=>foods.set(String(food.name||'').trim().toLocaleLowerCase(),food));
+  return normalizeState({...remote,profile:profileChanged(local.profile)?{...remote.profile,...local.profile}:remote.profile,meals,weights:{...remote.weights,...localWeights},savedFoods:[...foods.values()].filter(food=>food.name).slice(0,50),fitnessInterest:Boolean(remote.fitnessInterest||local.fitnessInterest)});
+}
+function setAuthMessage(message,error=false){const el=$('#authStatus');el.hidden=!message;el.textContent=message||'';el.classList.toggle('error',error)}
+function setSyncState(mode,label){const button=$('#openAccount');button.classList.remove('syncing','pending','synced');if(mode)button.classList.add(mode);$('#accountLabel').textContent=label}
+function renderAuth(){
+  const signedIn=Boolean(authSession?.user);$('#authSignedOut').hidden=signedIn;$('#authSignedIn').hidden=!signedIn;
+  if(signedIn){$('#accountEmail').textContent=authSession.user.email||'已登录账号';$('#lastSyncText').textContent=lastSyncAt?`上次同步：${lastSyncAt.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}`:'正在检查云端数据…';$('#privacyTitle').textContent='已开启账号云同步';$('#privacyText').textContent='饮食、体重和常用食物会同步；营养成分照片不会上传。';if(!$('#openAccount').classList.contains('syncing')&&!$('#openAccount').classList.contains('pending'))setSyncState('synced','已同步')}else{$('#privacyTitle').textContent='未登录时，记录只保存在这台设备';$('#privacyText').textContent='登录后可在手机和电脑间同步；营养成分照片不会上传。';setSyncState('','登录同步')}
+}
+async function uploadCloud(showToast=false){
+  if(!cloudClient||!authSession?.user||isApplyingCloud)return false;clearTimeout(cloudTimer);setSyncState('syncing','同步中…');
+  const {error}=await cloudClient.from('user_app_state').upsert({user_id:authSession.user.id,payload:state,updated_at:new Date().toISOString()},{onConflict:'user_id'});
+  if(error){console.warn('Cloud sync failed',error);setSyncState('pending','待同步');setAuthMessage('云同步暂时失败，本机记录已保留；联网后可点“立即同步”。',true);return false}
+  lastSyncAt=new Date();setSyncState('synced','已同步');setAuthMessage('云端记录已是最新。');renderAuth();if(showToast)toast('已同步到云端');return true;
+}
+function queueCloudSync(){if(!cloudClient||!authSession?.user||isApplyingCloud)return;clearTimeout(cloudTimer);setSyncState('syncing','同步中…');cloudTimer=setTimeout(()=>uploadCloud(false),800)}
+async function syncFromCloud(){
+  if(!cloudClient||!authSession?.user)return;const userId=authSession.user.id,localSnapshot=normalizeState(state);setSyncState('syncing','同步中…');setAuthMessage('正在读取云端记录…');
+  const {data,error}=await cloudClient.from('user_app_state').select('payload,updated_at').eq('user_id',userId).maybeSingle();
+  if(error){console.warn('Cloud load failed',error);setSyncState('pending','待同步');setAuthMessage('暂时无法读取云端记录，本机数据没有丢失。',true);return}
+  const migratedUser=localStorage.getItem(CLOUD_MIGRATION_KEY);let shouldUpload=false;
+  isApplyingCloud=true;
+  if(data?.payload){const remote=normalizeState(data.payload);const shouldMerge=migratedUser!==userId&&hasMeaningfulData(localSnapshot);state=shouldMerge?mergeStates(remote,localSnapshot):remote;shouldUpload=shouldMerge;lastSyncAt=data.updated_at?new Date(data.updated_at):new Date()}
+  else{state=localSnapshot;shouldUpload=true}
+  saveLocal();localStorage.setItem(CLOUD_MIGRATION_KEY,userId);isApplyingCloud=false;render();renderAuth();
+  if(shouldUpload)await uploadCloud(false);else{setSyncState('synced','已同步');setAuthMessage('已载入云端记录。')}
+}
+async function handleAuthSession(event,session){
+  authSession=session;renderAuth();
+  if(session?.user){if(lastHandledUser!==session.user.id){lastHandledUser=session.user.id;await syncFromCloud()}}else if(event==='SIGNED_OUT'){lastHandledUser='';clearTimeout(cloudTimer);isApplyingCloud=true;state=freshState();saveLocal();isApplyingCloud=false;lastSyncAt=null;render();renderAuth();setAuthMessage('已退出登录，云端记录仍然保留。')}
+}
+function initializeCloud(){
+  const config=window.QINGSHIJI_CLOUD||{};
+  if(!window.supabase||!config.url||!config.publishableKey){setSyncState('pending','同步未配置');return}
+  cloudClient=window.supabase.createClient(config.url,config.publishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+  cloudClient.auth.onAuthStateChange((event,session)=>setTimeout(()=>handleAuthSession(event,session),0));
+}
 function renderChart(){
   const days=[...Array(7)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()-(6-i));const key=iso(d);const total=(state.meals[key]||[]).reduce((s,m)=>s+Number(m.kcal),0);return {key,label:i===6?'今天':new Intl.DateTimeFormat('zh-CN',{weekday:'short'}).format(d),total}});
   const max=Math.max(state.profile.goal,...days.map(d=>d.total));
@@ -199,7 +247,7 @@ $('#savedFoodList').addEventListener('click',e=>{const remove=e.target.closest('
 $('#foodName').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchFood()}});
 $('#foodResults').addEventListener('click',e=>{const button=e.target.closest('[data-food-index]');if(!button)return;const foods=JSON.parse($('#foodResults').dataset.foods||'[]');selectedFood=foods[Number(button.dataset.foodIndex)];if(!selectedFood)return;$('#foodResults').innerHTML='';$('#searchStatus').hidden=true;$('#selectedFood').hidden=false;$('#amountLabel').hidden=false;$('#saveFood').disabled=false;updateSelectedFood()});
 $('#foodAmount').addEventListener('input',updateSelectedFood);
-$('#foodForm').addEventListener('submit',e=>{e.preventDefault();if(!selectedFood)return searchFood();const amount=Number($('#foodAmount').value)||100,ratio=amount/100,one=n=>Math.round(n*10)/10,name=$('#foodName').value.trim(),remembered=Boolean(selectedFood.remember);const item={type:$('#mealType').value,name,amount,sourceName:selectedFood.description,source:selectedFood.source||'USDA FoodData Central',kcal:Math.round(selectedFood.kcal*ratio),protein:one(selectedFood.protein*ratio),carbs:one(selectedFood.carbs*ratio),fat:one(selectedFood.fat*ratio)};(state.meals[today] ||= []).push(item);rememberFood(name,amount);save();$('#foodDialog').close();render();toast(remembered?'已记录并保存到常用食物':'营养数据已自动记录')});
+$('#foodForm').addEventListener('submit',e=>{e.preventDefault();if(!selectedFood)return searchFood();const amount=Number($('#foodAmount').value)||100,ratio=amount/100,one=n=>Math.round(n*10)/10,name=$('#foodName').value.trim(),remembered=Boolean(selectedFood.remember);const item={id:crypto.randomUUID?.()||`${Date.now()}-${Math.random().toString(16).slice(2)}`,type:$('#mealType').value,name,amount,sourceName:selectedFood.description,source:selectedFood.source||'USDA FoodData Central',kcal:Math.round(selectedFood.kcal*ratio),protein:one(selectedFood.protein*ratio),carbs:one(selectedFood.carbs*ratio),fat:one(selectedFood.fat*ratio)};(state.meals[today] ||= []).push(item);rememberFood(name,amount);save();$('#foodDialog').close();render();toast(remembered?'已记录并保存到常用食物':'营养数据已自动记录')});
 $('#mealRecommendations').addEventListener('click',e=>{const swap=e.target.closest('[data-swap-meal]');if(swap){const meal=swap.dataset.swapMeal;recommendationVariant[meal]=(recommendationVariant[meal]+1)%MEAL_PLANS[meal].length;renderRecommendations();return}const food=e.target.closest('[data-recommend-food]');if(food)openFood(food.dataset.recommendMeal,food.dataset.recommendFood)});
 $('#mealList').addEventListener('click',e=>{const b=e.target.closest('[data-delete]');if(!b)return;state.meals[today].splice(Number(b.dataset.delete),1);save();render();toast('已删除这条记录')});
 $$('.nav-item').forEach(b=>b.addEventListener('click',()=>{$$('.nav-item').forEach(x=>x.classList.toggle('active',x===b));$$('.view').forEach(v=>v.classList.toggle('active',v.dataset.view===b.dataset.target));scrollTo({top:0,behavior:'smooth'})}));
@@ -208,5 +256,12 @@ $('#recalculate').addEventListener('click',()=>{$('#sexInput').value='male';$('#
 $('#profileForm').addEventListener('submit',e=>{e.preventDefault();state.profile=formProfile();state.weights[today]=state.profile.weight;save();$('#profileDialog').close();render();toast('个人目标已更新')});
 $('#saveWeight').addEventListener('click',()=>{const w=Number($('#weightInput').value);if(!w||w<30||w>300)return toast('请输入有效体重');state.profile.weight=w;state.weights[today]=w;save();render();toast('今天的体重已保存')});
 $('#fitnessInterest').addEventListener('click',()=>{state.fitnessInterest=true;save();$('#fitnessInterest').textContent='已记录你的期待 ✓';$('#fitnessInterest').disabled=true;toast('下一步会优先考虑健身模块')});
+$('#openAccount').addEventListener('click',()=>{setAuthMessage('');renderAuth();$('#authDialog').showModal();if(!authSession)setTimeout(()=>$('#authEmail').focus(),80)});
+function authErrorMessage(error){const message=String(error?.message||'');if(/invalid login credentials/i.test(message))return '邮箱或密码不正确。';if(/email not confirmed/i.test(message))return '请先打开确认邮件完成验证，再回来登录。';if(/already registered/i.test(message))return '这个邮箱已经注册，请直接登录。';if(/password/i.test(message))return '密码至少需要 6 位，请换一个更安全的密码。';return message||'操作没有完成，请稍后再试。'}
+async function setAuthBusy(busy){['#signIn','#signUp','#syncNow','#signOut'].forEach(id=>{const element=$(id);if(element)element.disabled=busy})}
+$('#authForm').addEventListener('submit',async e=>{e.preventDefault();if(!cloudClient)return setAuthMessage('云同步服务暂时没有加载，请刷新页面后重试。',true);const email=$('#authEmail').value.trim(),password=$('#authPassword').value;if(!email||password.length<6)return setAuthMessage('请输入有效邮箱和至少 6 位密码。',true);setAuthBusy(true);setAuthMessage('正在登录…');const {error}=await cloudClient.auth.signInWithPassword({email,password});setAuthBusy(false);if(error)return setAuthMessage(authErrorMessage(error),true);$('#authPassword').value='';setAuthMessage('登录成功，正在同步记录…')});
+$('#signUp').addEventListener('click',async()=>{if(!cloudClient)return setAuthMessage('云同步服务暂时没有加载，请刷新页面后重试。',true);const email=$('#authEmail').value.trim(),password=$('#authPassword').value;if(!email||password.length<6)return setAuthMessage('请输入有效邮箱和至少 6 位密码。',true);setAuthBusy(true);setAuthMessage('正在创建账号…');const emailRedirectTo=`${location.origin}${location.pathname}`;const {data,error}=await cloudClient.auth.signUp({email,password,options:{emailRedirectTo}});setAuthBusy(false);if(error)return setAuthMessage(authErrorMessage(error),true);$('#authPassword').value='';setAuthMessage(data.session?'账号创建成功，正在同步记录…':'账号已创建，请打开确认邮件完成验证，然后回来登录。')});
+$('#syncNow').addEventListener('click',()=>uploadCloud(true));
+$('#signOut').addEventListener('click',async()=>{if(!cloudClient)return;setAuthBusy(true);setAuthMessage('正在退出…');const {error}=await cloudClient.auth.signOut();setAuthBusy(false);if(error)setAuthMessage(authErrorMessage(error),true)});
 if(state.fitnessInterest){$('#fitnessInterest').textContent='已记录你的期待 ✓';$('#fitnessInterest').disabled=true}
-save();render();
+save();render();renderAuth();initializeCloud();
