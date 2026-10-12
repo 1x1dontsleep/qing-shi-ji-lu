@@ -108,15 +108,19 @@
     <form method="dialog" id="foodForm">
       <div class="dialog-head"><div><p class="eyebrow">快速记录</p><h2>搜索并添加食物</h2></div><button type="button" class="icon-button" data-close-dialog aria-label="关闭">×</button></div>
       <label>餐次<select id="mealType"><option>早餐</option><option>午餐</option><option>晚餐</option><option>加餐</option></select></label>
+      <section id="savedFoodSection" class="saved-foods" hidden>
+        <div class="saved-foods-head"><strong>我的常用食物</strong><small>保存在这台设备</small></div>
+        <div id="savedFoodList" class="saved-food-list"></div>
+      </section>
       <label>食物名称<div class="food-search"><input id="foodName" required maxlength="40" placeholder="例如：鸡胸肉、米饭、香蕉"><button id="searchFood" type="button">联网查询</button></div><small>中文优先显示；数据联网获取。薄荷健康官方 API 尚未连接。<a class="boohee-link" href="https://foodie.boohee.com/" target="_blank" rel="noopener">打开薄荷健康核对</a></small></label>
       <section class="photo-ocr" aria-labelledby="photoOcrTitle">
-        <div class="photo-ocr-copy"><strong id="photoOcrTitle">有包装？拍营养成分表</strong><small>支持中文和英文，图片只在你的手机中识别</small></div>
-        <label class="photo-button" for="nutritionPhoto">📷 拍照识别</label>
+        <div class="photo-ocr-copy"><strong id="photoOcrTitle">包装或自定义食物</strong><small>识别或填写一次，保存后下次可直接选择</small></div>
+        <div class="entry-buttons"><label class="photo-button" for="nutritionPhoto">📷 拍照</label><button id="openCustomFood" class="custom-food-button" type="button">✍️ 手动</button></div>
         <input id="nutritionPhoto" class="visually-hidden" type="file" accept="image/*" capture="environment">
         <img id="nutritionPreview" class="nutrition-preview" alt="营养成分表预览" hidden>
         <div id="ocrStatus" class="ocr-status" role="status" hidden></div>
         <div id="ocrEditor" class="ocr-editor" hidden>
-          <p>请核对识别结果，标签排版不同可能造成误差。</p>
+          <p id="ocrEditorHint">请核对识别结果，标签排版不同可能造成误差。</p>
           <div class="ocr-grid">
             <label>数据对应重量<input id="ocrBasis" type="number" inputmode="decimal" min="1" max="3000" step="0.1"><small>克</small></label>
             <label>热量<input id="ocrKcal" type="number" inputmode="decimal" min="0" max="10000" step="0.1"><small>kcal</small></label>
